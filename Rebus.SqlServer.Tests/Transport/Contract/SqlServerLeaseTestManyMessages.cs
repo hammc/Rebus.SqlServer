@@ -6,3 +6,6 @@ namespace Rebus.SqlServer.Tests.Transport.Contract;
 
 [TestFixture]
 public class SqlServerLeaseTestManyMessages : TestManyMessages<SqlServerLeaseBusFactory> { }
+
+[TestFixture]
+public class SingleMessageTableSqlServerLeaseTestManyMessages : TestManyMessages<SingleMessageTableSqlServerLeaseBusFactory> { }

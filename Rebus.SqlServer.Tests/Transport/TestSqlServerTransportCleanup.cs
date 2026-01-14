@@ -15,14 +15,28 @@ using Rebus.Tests.Contracts.Utilities;
 namespace Rebus.SqlServer.Tests.Transport;
 
 [TestFixture]
-public class TestSqlServerTransportCleanup : FixtureBase
+public class TestSqlServerTransportCleanup : TestSqlServerTransportCleanupBase
+{
+}
+
+[TestFixture]
+public class TestSingleMessageTableSqlServerTransportCleanup : TestSqlServerTransportCleanupBase
+{
+    protected override bool UseSingleMessageTable => true;
+}
+
+public abstract class TestSqlServerTransportCleanupBase : FixtureBase
 {
     BuiltinHandlerActivator _activator;
     ListLoggerFactory _loggerFactory;
     IBusStarter _starter;
 
+    protected virtual bool UseSingleMessageTable => false;
+
     protected override void SetUp()
     {
+        SqlTestHelper.DropAllTables();
+
         var queueName = TestConfig.GetName("connection_timeout");
 
         _activator = new BuiltinHandlerActivator();
@@ -31,9 +45,16 @@ public class TestSqlServerTransportCleanup : FixtureBase
 
         _loggerFactory = new ListLoggerFactory(outputToConsole: true);
 
+        var options = new SqlServerTransportOptions(SqlTestHelper.ConnectionString);
+
+        if (UseSingleMessageTable)
+        {
+            options.UseSingleMessageTable("Messages");
+        }
+
         _starter = Configure.With(_activator)
             .Logging(l => l.Use(_loggerFactory))
-            .Transport(t => t.UseSqlServer(new SqlServerTransportOptions(SqlTestHelper.ConnectionString), queueName))
+            .Transport(t => t.UseSqlServer(options, queueName))
             .Create();
     }
 

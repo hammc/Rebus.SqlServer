@@ -6,3 +6,6 @@ namespace Rebus.SqlServer.Tests.Transport.Contract;
 
 [TestFixture, Category(Categories.SqlServer)]
 public class SqlServerLeaseTransportMessageExpiration : MessageExpiration<SqlLeaseTransportFactory> { }
+
+[TestFixture, Category(Categories.SqlServer)]
+public class SingleMessageTableSqlServerLeaseTransportMessageExpiration : MessageExpiration<SingleMessageTableSqlLeaseTransportFactory> { }

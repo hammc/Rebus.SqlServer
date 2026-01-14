@@ -53,7 +53,7 @@ public class SqlServerTransportOptions : SqlServerOptions
         NativeTimeoutManagerDisabled = true;
         return this;
     }
-
+    
     /// <summary>
     /// Name of the input queue to process. If <c>null</c> or whitespace the transport will be configured in one way mode (send only)
     /// </summary>
@@ -63,6 +63,11 @@ public class SqlServerTransportOptions : SqlServerOptions
     /// If true, the input queue table will be automatically dropped on transport disposal
     /// </summary>
     public bool AutoDeleteQueue { get; internal set; } = false;
+
+    /// <summary>
+    /// If set, uses this table to send and receive messages
+    /// </summary>
+    public string SingleMessageTableName { get; internal set; }
 
     /// <summary>
     /// If <c>true</c> the transport is configured in one way mode

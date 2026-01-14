@@ -1,8 +1,10 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using Rebus.Activation;
 using Rebus.Config;
+using Rebus.Injection;
 using Rebus.Logging;
 using Rebus.Tests.Contracts;
 
@@ -43,5 +45,23 @@ public class TestSqlServerTransportAutoDelete : FixtureBase
         {
             Assert.That(connection.GetTableNames().Contains(TableName.Parse(queueName)), Is.False);
         }
+    }
+    
+    [Test]
+    public void Dispose_WhenAutoDeleteQueueEnabledWithSingleMessageTable_ThrowsException()
+    {
+        var exception = Assert.Throws<ResolutionException>(() =>
+        {
+            const string queueName = "input";
+
+            var options = new SqlServerTransportOptions(SqlTestHelper.ConnectionString);
+
+            var activator = Using(new BuiltinHandlerActivator());
+            Configure.With(activator)
+                .Transport(t => t.UseSqlServer(options, queueName).SetAutoDeleteQueue(true).UseSingleMessageTable("Messages"))
+                .Start();
+        });
+        
+        Assert.That(exception.InnerException.Message, Is.EqualTo("Cannot use AutoDeleteQueue when using SingleMessageTableName"));
     }
 }

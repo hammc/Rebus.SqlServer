@@ -63,12 +63,14 @@ public class SqlServerTransport : ITransport, IInitializable, IDisposable
     /// <summary>
     /// Name of the table this transport is using for storage
     /// </summary>
-    protected readonly TableName ReceiveTableName;
+    protected TableName ReceiveTableName => MessageTableStrategy.ReceiveTableName;
 
     /// <summary>
     /// Logger
     /// </summary>
     protected readonly ILog Log;
+
+    private protected IMessageTableStrategy MessageTableStrategy { get; }
 
     readonly AsyncBottleneck _bottleneck = new(20);
     readonly IAsyncTask _expiredMessagesCleanupTask;
@@ -83,10 +85,13 @@ public class SqlServerTransport : ITransport, IInitializable, IDisposable
     {
         if (rebusLoggerFactory == null) throw new ArgumentNullException(nameof(rebusLoggerFactory));
         if (asyncTaskFactory == null) throw new ArgumentNullException(nameof(asyncTaskFactory));
+        if (options.SingleMessageTableName is not null && options.AutoDeleteQueue) throw new ArgumentException($"Cannot use {nameof(SqlServerTransportOptions.AutoDeleteQueue)} when using {nameof(SqlServerTransportOptions.SingleMessageTableName)}");
 
         _rebusTime = rebusTime ?? throw new ArgumentNullException(nameof(rebusTime));
         ConnectionProvider = connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
-        ReceiveTableName = inputQueueName != null ? TableName.Parse(inputQueueName) : null;
+        MessageTableStrategy = options.SingleMessageTableName == null
+            ? new TablePerQueueStrategy(inputQueueName)
+            : new SingleMessageTableStrategy(inputQueueName, options.SingleMessageTableName);
 
         Log = rebusLoggerFactory.GetLogger<SqlServerTransport>();
 
@@ -94,7 +99,8 @@ public class SqlServerTransport : ITransport, IInitializable, IDisposable
         var intervalSeconds = (int)cleanupInterval.TotalSeconds;
 
         _expiredMessagesCleanupTask = asyncTaskFactory.Create("ExpiredMessagesCleanup", PerformExpiredMessagesCleanupCycle, intervalSeconds: intervalSeconds);
-        _autoDeleteQueue = options.AutoDeleteQueue;
+
+         _autoDeleteQueue = options.AutoDeleteQueue;
 
         _nativeTimeoutManagerDisabled = options.NativeTimeoutManagerDisabled;
     }
@@ -112,7 +118,7 @@ public class SqlServerTransport : ITransport, IInitializable, IDisposable
     /// <summary>
     /// Gets the name that this SQL transport will use to query by when checking the messages table
     /// </summary>
-    public string Address => ReceiveTableName?.QualifiedName;
+    public string Address => MessageTableStrategy.Address;
 
     /// <summary>
     /// Creates the table named after the given <paramref name="address"/>
@@ -177,6 +183,7 @@ IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{ta
     CREATE TABLE {tableName.QualifiedName}
     (
 	    [id] [bigint] IDENTITY(1,1) NOT NULL,
+      {MessageTableStrategy.AdditionalCreateColumns}
 	    [priority] [int] NOT NULL,
         [expiration] [datetimeoffset] NOT NULL,
         [visible] [datetimeoffset] NOT NULL,
@@ -184,6 +191,7 @@ IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{ta
 	    [body] [varbinary](max) NOT NULL,
         CONSTRAINT [PK_{tableName.Schema}_{tableName.Name}] PRIMARY KEY CLUSTERED 
         (
+          {MessageTableStrategy.AdditionalPrimaryKeyColumns}
 	        [priority] ASC,
 	        [id] ASC
         )
@@ -204,6 +212,7 @@ END
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = '{receiveIndexName}')
     CREATE NONCLUSTERED INDEX [{receiveIndexName}] ON {tableName.QualifiedName}
     (
+        {MessageTableStrategy.AdditionalIndexColumns}
         [priority] DESC,
         [visible] ASC,
         [id] ASC,
@@ -381,9 +390,9 @@ IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{tableN
 				[headers],
 				[body]
 		FROM	{ReceiveTableName.QualifiedName} M WITH (ROWLOCK, READPAST, READCOMMITTEDLOCK)
-		WHERE	
-                M.[visible] < sysdatetimeoffset()
+		WHERE	M.[visible] < sysdatetimeoffset()
 		AND		M.[expiration] > sysdatetimeoffset()
+    {MessageTableStrategy.AdditionalReceiveConditions}
 		ORDER
 		BY		[priority] DESC,
 				[visible] ASC,
@@ -397,6 +406,7 @@ IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{tableN
 	SET NOCOUNT OFF
 						";
 
+        MessageTableStrategy.AddAdditionalReceiveParameters(selectCommand);
         try
         {
             using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -458,13 +468,14 @@ IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{tableN
     /// <param name="connection">Connection to use for writing to the database</param>
     protected async Task InnerSendAsync(string destinationAddress, TransportMessage message, IDbConnection connection)
     {
-        var sendTable = TableName.Parse(destinationAddress);
+        var sendTable = MessageTableStrategy.GetSendTable(destinationAddress);
 
         using var command = connection.CreateCommand();
 
         command.CommandText = $@"
 INSERT INTO {sendTable.QualifiedName}
 (
+    {MessageTableStrategy.AdditionalInsertColumns}
     [headers],
     [body],
     [priority],
@@ -473,6 +484,7 @@ INSERT INTO {sendTable.QualifiedName}
 )
 VALUES
 (
+    {MessageTableStrategy.AdditionalInsertValues}
     @headers,
     @body,
     @priority,
@@ -489,6 +501,7 @@ VALUES
         // must be last because the other functions on the headers might change them
         var serializedHeaders = HeaderSerializer.Serialize(headers);
 
+        MessageTableStrategy.AddAdditionalInsertParameters(command, destinationAddress);
         command.Parameters.Add("headers", SqlDbType.VarBinary, MathUtil.GetNextPowerOfTwo(serializedHeaders.Length)).Value = serializedHeaders;
         command.Parameters.Add("body", SqlDbType.VarBinary, MathUtil.GetNextPowerOfTwo(message.Body.Length)).Value = message.Body;
         command.Parameters.Add("priority", SqlDbType.Int).Value = priority;
@@ -554,12 +567,12 @@ VALUES
                     $@"
 ;with TopCTE as (
 	SELECT TOP 1 [id] FROM {ReceiveTableName.QualifiedName} WITH (ROWLOCK, READPAST)
-				WHERE 
-                    [expiration] < sysdatetimeoffset()
+				WHERE [expiration] < sysdatetimeoffset()
+        {MessageTableStrategy.AdditionalCleanupConditions}
 )
 DELETE FROM TopCTE
 ";
-
+                MessageTableStrategy.AddAdditionalCleanupParameters(command);
                 affectedRows = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
 

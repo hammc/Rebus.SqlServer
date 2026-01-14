@@ -15,22 +15,41 @@ using Rebus.Tests.Contracts.Extensions;
 namespace Rebus.SqlServer.Tests.Integration;
 
 [TestFixture, Category(Categories.SqlServer)]
-public class NativeDeferTest : FixtureBase
+public class NativeDeferTest : NativeDeferTestBase
+{
+}
+
+[TestFixture, Category(Categories.SqlServer)]
+public class TestSingleMessageTableNativeDeferTest : NativeDeferTestBase
+{
+    protected override bool UseSingleMessageTable => true;
+}
+
+public abstract class NativeDeferTestBase : FixtureBase
 {
     static readonly string QueueName = TestConfig.GetName("input");
     BuiltinHandlerActivator _activator;
     IBusStarter _starter;
 
+    protected virtual bool UseSingleMessageTable => false;
+
     protected override void SetUp()
     {
-        SqlTestHelper.DropTable("Messages");
+        SqlTestHelper.DropAllTables();
 
         _activator = new BuiltinHandlerActivator();
 
         Using(_activator);
 
+        var options = new SqlServerTransportOptions(SqlTestHelper.ConnectionString);
+
+        if (UseSingleMessageTable)
+        {
+            options.UseSingleMessageTable("Messages");
+        }
+
         _starter = Configure.With(_activator)
-            .Transport(t => t.UseSqlServer(new SqlServerTransportOptions(SqlTestHelper.ConnectionString), QueueName))
+            .Transport(t => t.UseSqlServer(options, QueueName))
             .Routing(r => r.TypeBased().Map<TimedMessage>(QueueName))
             .Options(o =>
             {

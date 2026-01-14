@@ -9,11 +9,21 @@ using Rebus.Tests.Contracts.Transports;
 
 namespace Rebus.SqlServer.Tests.Transport.Contract.Factories;
 
-public class SqlServerBusFactory : IBusFactory
+public class SingleMessageTableSqlServerBusFactory : SqlServerBusFactoryBase
+{
+    protected override SqlServerTransportOptions CreateSqlServerTransportOptions()
+    {
+        return base.CreateSqlServerTransportOptions().UseSingleMessageTable("Messages");
+    }
+}
+
+public class SqlServerBusFactory : SqlServerBusFactoryBase { }
+
+public class SqlServerBusFactoryBase : IBusFactory
 {
     readonly List<IDisposable> _stuffToDispose = new List<IDisposable>();
 
-    public SqlServerBusFactory()
+    public SqlServerBusFactoryBase()
     {
         SqlTestHelper.DropAllTables();
     }
@@ -29,7 +39,11 @@ public class SqlServerBusFactory : IBusFactory
         SqlTestHelper.DropTable(tableName);
 
         var bus = Configure.With(builtinHandlerActivator)
-            .Transport(t => t.UseSqlServer(new SqlServerTransportOptions(SqlTestHelper.ConnectionString), inputQueueAddress))
+            .Transport(t =>
+            {
+                var sqlServerTransportOptions = CreateSqlServerTransportOptions();
+                t.UseSqlServer(sqlServerTransportOptions, inputQueueAddress);
+            })
             .Options(o =>
             {
                 o.SetNumberOfWorkers(10);
@@ -40,6 +54,11 @@ public class SqlServerBusFactory : IBusFactory
         _stuffToDispose.Add(bus);
 
         return bus;
+    }
+
+    protected virtual SqlServerTransportOptions CreateSqlServerTransportOptions()
+    {
+        return new SqlServerTransportOptions(SqlTestHelper.ConnectionString);
     }
 
     public void Cleanup()

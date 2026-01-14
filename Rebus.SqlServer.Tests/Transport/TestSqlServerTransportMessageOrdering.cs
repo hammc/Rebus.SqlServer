@@ -16,9 +16,22 @@ using Rebus.Transport;
 namespace Rebus.SqlServer.Tests.Transport;
 
 [TestFixture]
-public class TestSqlServerTransportMessageOrdering : FixtureBase
+public class TestSqlServerTransportMessageOrdering : TestSqlServerTransportMessageOrderingBase
+{
+}
+
+[TestFixture]
+public class TestSingleMessageTableSqlServerTransportMessageOrdering : TestSqlServerTransportMessageOrderingBase
+{
+    protected override bool UseSingleMessageTable => true;
+}
+
+public abstract class TestSqlServerTransportMessageOrderingBase : FixtureBase
 {
     const string QueueName = "test-ordering";
+
+    protected virtual bool UseSingleMessageTable => false;
+
     protected override void SetUp() => SqlTestHelper.DropAllTables();
 
     [TestCase(TransportType.LockedRows)]
@@ -93,6 +106,15 @@ public class TestSqlServerTransportMessageOrdering : FixtureBase
         var connectionProvider = new DbConnectionProvider(SqlTestHelper.ConnectionString, loggerFactory);
         var asyncTaskFactory = new TplAsyncTaskFactory(loggerFactory);
 
+        var sqlServerTransportOptions = new SqlServerTransportOptions(connectionProvider);
+        var sqlServerLeaseTransportOptions = new SqlServerLeaseTransportOptions(connectionProvider);
+
+        if (UseSingleMessageTable)
+        {
+            sqlServerTransportOptions.UseSingleMessageTable("Messages");
+            sqlServerLeaseTransportOptions.UseSingleMessageTable("Messages");
+        }
+
         var transport = transportType == TransportType.LeaseBased
             ? new SqlServerLeaseTransport(
                 connectionProvider,
@@ -103,7 +125,7 @@ public class TestSqlServerTransportMessageOrdering : FixtureBase
                 TimeSpan.FromMinutes(1),
                 TimeSpan.FromSeconds(5),
                 () => "who cares",
-                new SqlServerLeaseTransportOptions(connectionProvider)
+                sqlServerLeaseTransportOptions
             )
             : new SqlServerTransport(
                 connectionProvider,
@@ -111,7 +133,7 @@ public class TestSqlServerTransportMessageOrdering : FixtureBase
                 loggerFactory,
                 asyncTaskFactory,
                 rebusTime,
-                new SqlServerTransportOptions(connectionProvider)
+                sqlServerTransportOptions
             );
 
         Using(transport);

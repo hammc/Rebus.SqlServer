@@ -45,6 +45,15 @@ public static class SqlServerTransportOptionsExtensions
     }
 
     /// <summary>
+    /// Instructs Rebus to use a single message table to send and receive messages.
+    /// </summary>
+    public static SqlServerTransportOptions UseSingleMessageTable<TTransportOptions>(this TTransportOptions options, string tableName) where TTransportOptions : SqlServerTransportOptions
+    {
+        options.SingleMessageTableName = tableName;
+        return options;
+    }
+    
+    /// <summary>
     /// Sets if table will be dropped automatically
     /// </summary>
     public static TTransportOptions SetAutoDeleteQueue<TTransportOptions>(this TTransportOptions options, bool autoDeleteQueue) where TTransportOptions : SqlServerTransportOptions

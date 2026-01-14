@@ -22,12 +22,18 @@ public class TestMessagePriority : FixtureBase
     protected override void SetUp() => SqlTestHelper.DropAllTables();
 
     [Test]
-    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_Normal() => await RunTest("normal", 20);
+    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_Normal() => await RunTest("normal", false, 20);
 
     [Test]
-    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_LeaseBased() => await RunTest("lease-based", 20);
+    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_LeaseBased() => await RunTest("lease-based", false, 20);
 
-    async Task RunTest(string type, int messageCount)
+    [Test]
+    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_NormalSingleMessageTable() => await RunTest("normal", true, 20);
+
+    [Test]
+    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_LeaseBasedSingleMessageTable() => await RunTest("lease-based", true, 20);
+    
+    async Task RunTest(string type, bool useSingleMessageTable, int messageCount)
     {
         using var counter = new SharedCounter(messageCount);
         var receivedMessagePriorities = new List<int>();
@@ -42,16 +48,24 @@ public class TestMessagePriority : FixtureBase
             counter.Decrement();
         });
 
+        var sqlServerTransportOptions = new SqlServerTransportOptions(SqlTestHelper.ConnectionString);
+        var sqlServerLeaseTransportOptions = new SqlServerLeaseTransportOptions(SqlTestHelper.ConnectionString);
+        if (useSingleMessageTable)
+        {
+            sqlServerTransportOptions.UseSingleMessageTable("Messages");
+            sqlServerLeaseTransportOptions.UseSingleMessageTable("Messages");
+        }
+        
         var serverBus = Configure.With(Using(server))
             .Transport(t =>
             {
                 if (type == "normal")
                 {
-                    t.UseSqlServer(new SqlServerTransportOptions(SqlTestHelper.ConnectionString), "server");
+                    t.UseSqlServer(sqlServerTransportOptions, "server");
                 }
                 else
                 {
-                    t.UseSqlServerInLeaseMode(new SqlServerLeaseTransportOptions(SqlTestHelper.ConnectionString), "server");
+                    t.UseSqlServerInLeaseMode(sqlServerLeaseTransportOptions, "server");
                 }
             })
             .Options(o =>
@@ -66,11 +80,11 @@ public class TestMessagePriority : FixtureBase
             {
                 if (type == "normal")
                 {
-                    t.UseSqlServerAsOneWayClient(new SqlServerTransportOptions(SqlTestHelper.ConnectionString));
+                    t.UseSqlServerAsOneWayClient(sqlServerTransportOptions);
                 }
                 else
                 {
-                    t.UseSqlServerInLeaseModeAsOneWayClient(new SqlServerLeaseTransportOptions(SqlTestHelper.ConnectionString));
+                    t.UseSqlServerInLeaseModeAsOneWayClient(sqlServerLeaseTransportOptions);
                 }
             })
             .Routing(t => t.TypeBased().Map<string>("server"))

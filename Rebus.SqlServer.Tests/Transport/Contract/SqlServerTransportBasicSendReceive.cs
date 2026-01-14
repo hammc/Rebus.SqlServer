@@ -8,3 +8,8 @@ namespace Rebus.SqlServer.Tests.Transport.Contract;
 public class SqlServerTransportBasicSendReceive : BasicSendReceive<SqlTransportFactory>
 {
 }
+
+[TestFixture, Category(Categories.SqlServer)]
+public class SingleMessageTableSqlServerTransportBasicSendReceive : BasicSendReceive<SingleMessageTableSqlTransportFactory>
+{
+}

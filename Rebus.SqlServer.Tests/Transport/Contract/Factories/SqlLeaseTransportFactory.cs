@@ -11,12 +11,24 @@ using Rebus.Transport;
 
 namespace Rebus.SqlServer.Tests.Transport.Contract.Factories;
 
-public class SqlLeaseTransportFactory : ITransportFactory
+public class SqlLeaseTransportFactory : SqlLeaseTransportFactoryBase { }
+
+public class SingleMessageTableSqlLeaseTransportFactory : SqlLeaseTransportFactoryBase
+{
+    protected override SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        var options = base.CreateSqlServerLeaseTransportOptions(connectionProvider);
+        options.UseSingleMessageTable("Messages");
+        return options;
+    }
+}
+
+public class SqlLeaseTransportFactoryBase : ITransportFactory
 {
     readonly HashSet<string> _tablesToDrop = new HashSet<string>();
     readonly List<IDisposable> _disposables = new List<IDisposable>();
 
-    public SqlLeaseTransportFactory()
+    protected SqlLeaseTransportFactoryBase()
     {
         SqlTestHelper.DropAllTables();
     }
@@ -33,8 +45,9 @@ public class SqlLeaseTransportFactory : ITransportFactory
         var consoleLoggerFactory = new ConsoleLoggerFactory(false);
         var connectionProvider = new DbConnectionProvider(SqlTestHelper.ConnectionString, consoleLoggerFactory);
         var asyncTaskFactory = new TplAsyncTaskFactory(consoleLoggerFactory);
+        var sqlServerLeaseTransportOptions = CreateSqlServerLeaseTransportOptions(connectionProvider);
         var transport = new SqlServerLeaseTransport(connectionProvider, null, consoleLoggerFactory,
-            asyncTaskFactory, rebusTime, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(2), () => Environment.MachineName, new SqlServerLeaseTransportOptions(connectionProvider));
+            asyncTaskFactory, rebusTime, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(2), () => Environment.MachineName, sqlServerLeaseTransportOptions);
 
         _disposables.Add(transport);
 
@@ -42,7 +55,7 @@ public class SqlLeaseTransportFactory : ITransportFactory
 
         return transport;
     }
-
+    
     public ITransport Create(string inputQueueAddress)
     {
         var tableName = ("RebusMessages_" + TestConfig.Suffix).TrimEnd('_');
@@ -55,8 +68,9 @@ public class SqlLeaseTransportFactory : ITransportFactory
         var consoleLoggerFactory = new ConsoleLoggerFactory(false);
         var connectionProvider = new DbConnectionProvider(SqlTestHelper.ConnectionString, consoleLoggerFactory);
         var asyncTaskFactory = new TplAsyncTaskFactory(consoleLoggerFactory);
+        var sqlServerLeaseTransportOptions = CreateSqlServerLeaseTransportOptions(connectionProvider);
         var transport = new SqlServerLeaseTransport(connectionProvider, inputQueueAddress, consoleLoggerFactory,
-            asyncTaskFactory, rebusTime, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(2), () => Environment.MachineName, new SqlServerLeaseTransportOptions(connectionProvider));
+            asyncTaskFactory, rebusTime, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(2), () => Environment.MachineName, sqlServerLeaseTransportOptions);
 
         _disposables.Add(transport);
             
@@ -66,6 +80,11 @@ public class SqlLeaseTransportFactory : ITransportFactory
         return transport;
     }
 
+    protected virtual SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        return new SqlServerLeaseTransportOptions(connectionProvider);
+    }
+    
     public void CleanUp()
     {
         _disposables.ForEach(d => d.Dispose());

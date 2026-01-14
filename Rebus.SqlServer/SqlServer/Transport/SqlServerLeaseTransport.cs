@@ -139,6 +139,7 @@ public class SqlServerLeaseTransport : SqlServerTransport
 	FROM	{ReceiveTableName.QualifiedName} M WITH (ROWLOCK, READPAST, READCOMMITTEDLOCK)
 	WHERE	M.[visible] < sysdatetimeoffset()
 	AND		M.[expiration] > sysdatetimeoffset()
+  {MessageTableStrategy.AdditionalReceiveConditions}
 	AND		1 = CASE
 					WHEN M.[leaseduntil] is null then 1
 					WHEN DATEADD(ms, @leasetolerancemilliseconds, DATEADD(ss, @leasetolerancetotalseconds, M.[leaseduntil])) < sysdatetimeoffset() THEN 1
@@ -160,6 +161,8 @@ OUTPUT	inserted.*";
             selectCommand.Parameters.Add("@leasetolerancemilliseconds", SqlDbType.Int).Value = _leaseTolerance.Milliseconds;
             selectCommand.Parameters.Add("@leasedby", SqlDbType.VarChar, LeasedByColumnSize).Value = _leasedByFactory();
 
+            MessageTableStrategy.AddAdditionalReceiveParameters(selectCommand);
+            
             try
             {
                 using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -229,6 +232,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes I JOIN sys.objects O ON I.name = '{rece
 BEGIN
 	CREATE NONCLUSTERED INDEX [{receiveIndexName}] ON {tableName.QualifiedName}
 	(
+    {MessageTableStrategy.AdditionalIndexColumns}
 		[priority] DESC,
 		[visible] ASC,
 		[id] ASC,

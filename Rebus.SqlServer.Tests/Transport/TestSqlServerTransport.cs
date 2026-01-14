@@ -19,11 +19,61 @@ using Rebus.Transport;
 namespace Rebus.SqlServer.Tests.Transport;
 
 [TestFixture, Category(Categories.SqlServer)]
-public class TestSqlServerTransport : FixtureBase
+public class TestSqlServerTransport : TestSqlServerTransportBase
 {
-    const string QueueName = "input";
-    SqlServerTransport _transport;
-    CancellationToken _cancellationToken;
+}
+
+[TestFixture, Category(Categories.SqlServer)]
+public class TestSingleMessageTableSqlServerTransport : TestSqlServerTransportBase
+{
+    protected override bool UseSingleMessageTable => true;
+
+    [Test]
+    public async Task OnlyReceivesMessagesForCorrectRecipient()
+    {
+        const string wrongQueueName = "wrong-queue";
+        var rebusTime = new DefaultRebusTime();
+        var consoleLoggerFactory = new ConsoleLoggerFactory(false);
+        var connectionProvider = new DbConnectionProvider(SqlTestHelper.ConnectionString, consoleLoggerFactory);
+        var asyncTaskFactory = new TplAsyncTaskFactory(consoleLoggerFactory);
+
+        var sqlServerTransportOptions = CreateSqlServerTransportOptions(connectionProvider);
+        
+        using var wrongTransport = new SqlServerTransport(connectionProvider, wrongQueueName, consoleLoggerFactory, asyncTaskFactory, rebusTime, sqlServerTransportOptions);
+
+        wrongTransport.EnsureTableIsCreated();
+        wrongTransport.Initialize();
+        
+        using (var scope = new RebusTransactionScope())
+        {
+            await Transport.Send(QueueName, RecognizableMessage(), scope.TransactionContext);
+            await scope.CompleteAsync();
+        }
+        
+        using (var scope = new RebusTransactionScope())
+        {
+            var transportMessage = await wrongTransport.Receive(scope.TransactionContext, CancellationToken);
+            Assert.That(transportMessage, Is.Null, "Other transport received a message that was not for it!");
+        }
+        
+        using (var scope = new RebusTransactionScope())
+        {
+            var transportMessage = await Transport.Receive(scope.TransactionContext, CancellationToken);
+            Assert.That(transportMessage, Is.Not.Null, "Transport did NOT receive the message!");
+            AssertMessageIsRecognized(transportMessage);
+            await scope.CompleteAsync();
+        }
+    }
+}
+
+public abstract class TestSqlServerTransportBase : FixtureBase
+{
+    protected const string QueueName = "input";
+
+    protected virtual bool UseSingleMessageTable => false;
+
+    protected SqlServerTransport Transport { get; private set; }
+    protected CancellationToken CancellationToken { get; private set; }
 
     protected override void SetUp()
     {
@@ -34,14 +84,26 @@ public class TestSqlServerTransport : FixtureBase
         var connectionProvider = new DbConnectionProvider(SqlTestHelper.ConnectionString, consoleLoggerFactory);
         var asyncTaskFactory = new TplAsyncTaskFactory(consoleLoggerFactory);
 
-        _transport = new SqlServerTransport(connectionProvider, QueueName, consoleLoggerFactory, asyncTaskFactory, rebusTime, new SqlServerTransportOptions(connectionProvider));
-        
-        Using(_transport);
+        var sqlServerTransportOptions = CreateSqlServerTransportOptions(connectionProvider);
 
-        _transport.EnsureTableIsCreated();
-        _transport.Initialize();
+        if (UseSingleMessageTable)
+        {
+            sqlServerTransportOptions.UseSingleMessageTable("Messages");
+        }
 
-        _cancellationToken = new CancellationTokenSource().Token;
+        Transport = new SqlServerTransport(connectionProvider, QueueName, consoleLoggerFactory, asyncTaskFactory, rebusTime, sqlServerTransportOptions);
+
+        Using(Transport);
+
+        Transport.EnsureTableIsCreated();
+        Transport.Initialize();
+
+        CancellationToken = new CancellationTokenSource().Token;
+    }
+
+    protected virtual SqlServerTransportOptions CreateSqlServerTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        return new SqlServerTransportOptions(connectionProvider);
     }
 
     [Test]
@@ -49,14 +111,14 @@ public class TestSqlServerTransport : FixtureBase
     {
         using (var scope = new RebusTransactionScope())
         {
-            await _transport.Send(QueueName, RecognizableMessage(), scope.TransactionContext);
+            await Transport.Send(QueueName, RecognizableMessage(), scope.TransactionContext);
 
             await scope.CompleteAsync();
         }
 
         using (var scope = new RebusTransactionScope())
         {
-            var transportMessage = await _transport.Receive(scope.TransactionContext, _cancellationToken);
+            var transportMessage = await Transport.Receive(scope.TransactionContext, CancellationToken);
 
             await scope.CompleteAsync();
 
@@ -69,7 +131,7 @@ public class TestSqlServerTransport : FixtureBase
     {
         using (var scope = new RebusTransactionScope())
         {
-            await _transport.Send(QueueName, RecognizableMessage(), scope.TransactionContext);
+            await Transport.Send(QueueName, RecognizableMessage(), scope.TransactionContext);
 
             // deliberately skip this:
             //await context.Complete();
@@ -77,7 +139,7 @@ public class TestSqlServerTransport : FixtureBase
 
         using (var scope = new RebusTransactionScope())
         {
-            var transportMessage = await _transport.Receive(scope.TransactionContext, _cancellationToken);
+            var transportMessage = await Transport.Receive(scope.TransactionContext, CancellationToken);
 
             Assert.That(transportMessage, Is.Null);
         }
@@ -95,7 +157,7 @@ public class TestSqlServerTransport : FixtureBase
             .Select(async i =>
             {
                 using var scope = new RebusTransactionScope();
-                await _transport.Send(QueueName, RecognizableMessage(i), scope.TransactionContext);
+                await Transport.Send(QueueName, RecognizableMessage(i), scope.TransactionContext);
                 await scope.CompleteAsync();
                 messageIds[i] = 0;
             }));
@@ -111,7 +173,7 @@ public class TestSqlServerTransport : FixtureBase
                 await Task.WhenAll(Enumerable.Range(0, 10).Select(async __ =>
                 {
                     using var scope = new RebusTransactionScope();
-                    var msg = await _transport.Receive(scope.TransactionContext, _cancellationToken);
+                    var msg = await Transport.Receive(scope.TransactionContext, CancellationToken);
                     await scope.CompleteAsync();
 
                     if (msg != null)
@@ -138,12 +200,12 @@ public class TestSqlServerTransport : FixtureBase
         }
     }
 
-    void AssertMessageIsRecognized(TransportMessage transportMessage)
+    protected void AssertMessageIsRecognized(TransportMessage transportMessage)
     {
         Assert.That(transportMessage.Headers.GetValue("recognizzle"), Is.EqualTo("hej"));
     }
 
-    static TransportMessage RecognizableMessage(int id = 0)
+    protected static TransportMessage RecognizableMessage(int id = 0)
     {
         var headers = new Dictionary<string, string>
         {

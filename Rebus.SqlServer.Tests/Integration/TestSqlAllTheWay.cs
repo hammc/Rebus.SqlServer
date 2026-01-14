@@ -13,23 +13,42 @@ using Rebus.Tests.Contracts.Extensions;
 namespace Rebus.SqlServer.Tests.Integration;
 
 [TestFixture, Category(Categories.SqlServer)]
-public class TestSqlAllTheWay : FixtureBase
+public class TestSqlAllTheWay : TestSqlAllTheWayBase
+{
+}
+
+[TestFixture, Category(Categories.SqlServer)]
+public class TestSingleMessageTableSqlAllTheWay : TestSqlAllTheWayBase
+{
+    protected override bool UseSingleMessageTable => true;
+}
+
+public abstract class TestSqlAllTheWayBase : FixtureBase
 {
     static readonly string ConnectionString = SqlTestHelper.ConnectionString;
 
     BuiltinHandlerActivator _activator;
     IBusStarter _starter;
 
+    protected virtual bool UseSingleMessageTable => false;
+
     protected override void SetUp()
     {
-        DropTables();
+        SqlTestHelper.DropAllTables();
 
         _activator = new BuiltinHandlerActivator();
 
         Using(_activator);
 
+        var options = new SqlServerTransportOptions(ConnectionString);
+
+        if (UseSingleMessageTable)
+        {
+            options.UseSingleMessageTable("Messages");
+        }
+
         _starter = Configure.With(_activator)
-            .Transport(x => x.UseSqlServer(new SqlServerTransportOptions(ConnectionString), "test.input"))
+            .Transport(x => x.UseSqlServer(options, "test.input"))
             .Sagas(x => x.StoreInSqlServer(ConnectionString, "Sagas", "SagaIndex"))
             .Options(x =>
             {
@@ -41,14 +60,7 @@ public class TestSqlAllTheWay : FixtureBase
 
     protected override void TearDown()
     {
-        DropTables();
-    }
-
-    static void DropTables()
-    {
-        SqlTestHelper.DropTable("RebusMessages");
-        SqlTestHelper.DropTable("SagaIndex");
-        SqlTestHelper.DropTable("Sagas");
+        SqlTestHelper.DropAllTables();
     }
 
     [Test]

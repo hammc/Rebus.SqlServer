@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Rebus.Activation;
 using Rebus.Bus;
 using Rebus.Config;
@@ -9,11 +10,23 @@ using Rebus.Tests.Contracts.Transports;
 
 namespace Rebus.SqlServer.Tests.Transport.Contract.Factories;
 
-public class SqlServerLeaseBusFactory : IBusFactory
+public class SqlServerLeaseBusFactory : SqlServerLeaseBusFactoryBase { }
+
+public class SingleMessageTableSqlServerLeaseBusFactory : SqlServerLeaseBusFactoryBase
+{
+    protected override SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions()
+    {
+        var options =  base.CreateSqlServerLeaseTransportOptions();
+        options.UseSingleMessageTable("Messages");
+        return options;
+    }
+}
+
+public class SqlServerLeaseBusFactoryBase : IBusFactory
 {
     readonly List<IDisposable> _stuffToDispose = new List<IDisposable>();
 
-    public SqlServerLeaseBusFactory()
+    protected SqlServerLeaseBusFactoryBase()
     {
         SqlTestHelper.DropAllTables();
     }
@@ -29,7 +42,12 @@ public class SqlServerLeaseBusFactory : IBusFactory
         SqlTestHelper.DropTable(tableName);
 
         var bus = Configure.With(builtinHandlerActivator)
-            .Transport(t => t.UseSqlServerInLeaseMode(new SqlServerLeaseTransportOptions(SqlTestHelper.ConnectionString), inputQueueAddress))
+            .Transport(t =>
+            {
+                var sqlServerLeaseTransportOptions = CreateSqlServerLeaseTransportOptions();
+                t.UseSqlServerInLeaseMode(sqlServerLeaseTransportOptions,
+                    inputQueueAddress);
+            })
             .Options(o =>
             {
                 o.SetNumberOfWorkers(10);
@@ -40,6 +58,11 @@ public class SqlServerLeaseBusFactory : IBusFactory
         _stuffToDispose.Add(bus);
 
         return bus;
+    }
+
+    protected virtual SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions()
+    {
+        return new SqlServerLeaseTransportOptions(SqlTestHelper.ConnectionString);
     }
 
     public void Cleanup()

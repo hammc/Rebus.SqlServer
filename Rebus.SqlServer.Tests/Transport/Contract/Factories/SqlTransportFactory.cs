@@ -11,12 +11,22 @@ using Rebus.Transport;
 
 namespace Rebus.SqlServer.Tests.Transport.Contract.Factories;
 
-public class SqlTransportFactory : ITransportFactory
+public class SingleMessageTableSqlTransportFactory : SqlTransportFactoryBase
+{
+    protected override SqlServerTransportOptions CreateSqlServerTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        return base.CreateSqlServerTransportOptions(connectionProvider).UseSingleMessageTable("Messages");
+    }
+}
+
+public class SqlTransportFactory : SqlTransportFactoryBase { }
+
+public class SqlTransportFactoryBase : ITransportFactory
 {
     readonly HashSet<string> _tablesToDrop = new HashSet<string>();
     readonly List<IDisposable> _disposables = new List<IDisposable>();
 
-    public SqlTransportFactory()
+    public SqlTransportFactoryBase()
     {
         SqlTestHelper.DropAllTables();
     }
@@ -27,7 +37,8 @@ public class SqlTransportFactory : ITransportFactory
         var consoleLoggerFactory = new ConsoleLoggerFactory(false);
         var connectionProvider = new DbConnectionProvider(SqlTestHelper.ConnectionString, consoleLoggerFactory);
         var asyncTaskFactory = new TplAsyncTaskFactory(consoleLoggerFactory);
-        var transport = new SqlServerTransport(connectionProvider, null, consoleLoggerFactory, asyncTaskFactory, rebusTime, new SqlServerTransportOptions(connectionProvider));
+        var sqlServerTransportOptions = CreateSqlServerTransportOptions(connectionProvider);
+        var transport = new SqlServerTransport(connectionProvider, null, consoleLoggerFactory, asyncTaskFactory, rebusTime, sqlServerTransportOptions);
 
         _disposables.Add(transport);
 
@@ -48,7 +59,8 @@ public class SqlTransportFactory : ITransportFactory
         var consoleLoggerFactory = new ConsoleLoggerFactory(false);
         var connectionProvider = new DbConnectionProvider(SqlTestHelper.ConnectionString, consoleLoggerFactory);
         var asyncTaskFactory = new TplAsyncTaskFactory(consoleLoggerFactory);
-        var transport = new SqlServerTransport(connectionProvider, inputQueueAddress, consoleLoggerFactory, asyncTaskFactory, rebusTime, new SqlServerTransportOptions(connectionProvider));
+        var sqlServerTransportOptions = CreateSqlServerTransportOptions(connectionProvider);
+        var transport = new SqlServerTransport(connectionProvider, inputQueueAddress, consoleLoggerFactory, asyncTaskFactory, rebusTime, sqlServerTransportOptions);
             
         _disposables.Add(transport);
             
@@ -56,6 +68,11 @@ public class SqlTransportFactory : ITransportFactory
         transport.Initialize();
             
         return transport;
+    }
+
+    protected virtual SqlServerTransportOptions CreateSqlServerTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        return new SqlServerTransportOptions(connectionProvider);
     }
 
     public void CleanUp()
