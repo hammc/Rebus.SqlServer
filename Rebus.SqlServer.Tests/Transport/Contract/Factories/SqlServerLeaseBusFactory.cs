@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Rebus.Activation;
 using Rebus.Bus;
 using Rebus.Config;
@@ -20,7 +19,7 @@ public class SingleMessageTableSqlServerLeaseBusFactory : SqlServerLeaseBusFacto
     }
 }
 
-public class SqlServerLeaseBusFactoryBase : IBusFactory
+public abstract class SqlServerLeaseBusFactoryBase : IBusFactory
 {
     readonly List<IDisposable> _stuffToDispose = new List<IDisposable>();
 

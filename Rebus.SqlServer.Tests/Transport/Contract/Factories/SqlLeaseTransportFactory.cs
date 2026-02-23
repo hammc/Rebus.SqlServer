@@ -22,7 +22,7 @@ public class SingleMessageTableSqlLeaseTransportFactory : SqlLeaseTransportFacto
     }
 }
 
-public class SqlLeaseTransportFactoryBase : ITransportFactory
+public abstract class SqlLeaseTransportFactoryBase : ITransportFactory
 {
     readonly HashSet<string> _tablesToDrop = new HashSet<string>();
     readonly List<IDisposable> _disposables = new List<IDisposable>();

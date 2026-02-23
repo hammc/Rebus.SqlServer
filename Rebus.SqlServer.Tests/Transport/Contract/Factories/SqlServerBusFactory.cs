@@ -19,11 +19,11 @@ public class SingleMessageTableSqlServerBusFactory : SqlServerBusFactoryBase
 
 public class SqlServerBusFactory : SqlServerBusFactoryBase { }
 
-public class SqlServerBusFactoryBase : IBusFactory
+public abstract class SqlServerBusFactoryBase : IBusFactory
 {
     readonly List<IDisposable> _stuffToDispose = new List<IDisposable>();
 
-    public SqlServerBusFactoryBase()
+    protected SqlServerBusFactoryBase()
     {
         SqlTestHelper.DropAllTables();
     }

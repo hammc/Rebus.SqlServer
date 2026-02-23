@@ -21,12 +21,12 @@ public class SingleMessageTableSqlTransportFactory : SqlTransportFactoryBase
 
 public class SqlTransportFactory : SqlTransportFactoryBase { }
 
-public class SqlTransportFactoryBase : ITransportFactory
+public abstract class SqlTransportFactoryBase : ITransportFactory
 {
     readonly HashSet<string> _tablesToDrop = new HashSet<string>();
     readonly List<IDisposable> _disposables = new List<IDisposable>();
 
-    public SqlTransportFactoryBase()
+    protected SqlTransportFactoryBase()
     {
         SqlTestHelper.DropAllTables();
     }
