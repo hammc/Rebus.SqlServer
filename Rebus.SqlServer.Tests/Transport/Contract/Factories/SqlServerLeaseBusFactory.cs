@@ -16,9 +16,7 @@ public class SingleMessageTableSqlServerLeaseBusFactory : SqlServerLeaseBusFacto
 {
     protected override SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions()
     {
-        var options =  base.CreateSqlServerLeaseTransportOptions();
-        options.UseSingleMessageTable("Messages");
-        return options;
+        return base.CreateSqlServerLeaseTransportOptions().UseSingleMessageTable("Messages");
     }
 }
 

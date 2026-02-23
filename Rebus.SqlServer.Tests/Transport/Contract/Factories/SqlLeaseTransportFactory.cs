@@ -17,9 +17,8 @@ public class SingleMessageTableSqlLeaseTransportFactory : SqlLeaseTransportFacto
 {
     protected override SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions(DbConnectionProvider connectionProvider)
     {
-        var options = base.CreateSqlServerLeaseTransportOptions(connectionProvider);
-        options.UseSingleMessageTable("Messages");
-        return options;
+        return base.CreateSqlServerLeaseTransportOptions(connectionProvider)
+            .UseSingleMessageTable("Messages");
     }
 }
 
