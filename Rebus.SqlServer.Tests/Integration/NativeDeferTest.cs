@@ -22,7 +22,10 @@ public class NativeDeferTest : NativeDeferTestBase
 [TestFixture, Category(Categories.SqlServer)]
 public class TestSingleMessageTableNativeDeferTest : NativeDeferTestBase
 {
-    protected override bool UseSingleMessageTable => true;
+    protected override SqlServerTransportOptions CreateSqlServerTransportOptions(string connectionString)
+    {
+        return base.CreateSqlServerTransportOptions(connectionString).UseSingleMessageTable("Messages");
+    }
 }
 
 public abstract class NativeDeferTestBase : FixtureBase
@@ -30,8 +33,6 @@ public abstract class NativeDeferTestBase : FixtureBase
     static readonly string QueueName = TestConfig.GetName("input");
     BuiltinHandlerActivator _activator;
     IBusStarter _starter;
-
-    protected virtual bool UseSingleMessageTable => false;
 
     protected override void SetUp()
     {
@@ -41,12 +42,7 @@ public abstract class NativeDeferTestBase : FixtureBase
 
         Using(_activator);
 
-        var options = new SqlServerTransportOptions(SqlTestHelper.ConnectionString);
-
-        if (UseSingleMessageTable)
-        {
-            options.UseSingleMessageTable("Messages");
-        }
+        var options = CreateSqlServerTransportOptions(SqlTestHelper.ConnectionString);
 
         _starter = Configure.With(_activator)
             .Transport(t => t.UseSqlServer(options, QueueName))
@@ -56,6 +52,11 @@ public abstract class NativeDeferTestBase : FixtureBase
                 o.LogPipeline();
             })
             .Create();
+    }
+    
+    protected virtual SqlServerTransportOptions CreateSqlServerTransportOptions(string connectionString)
+    {
+        return new SqlServerTransportOptions(connectionString);
     }
 
     [Test]

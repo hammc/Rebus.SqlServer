@@ -26,7 +26,10 @@ public class TestSqlServerTransport : TestSqlServerTransportBase
 [TestFixture, Category(Categories.SqlServer)]
 public class TestSingleMessageTableSqlServerTransport : TestSqlServerTransportBase
 {
-    protected override bool UseSingleMessageTable => true;
+    protected override SqlServerTransportOptions CreateSqlServerTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        return base.CreateSqlServerTransportOptions(connectionProvider).UseSingleMessageTable("Messages");
+    }
 
     [Test]
     public async Task OnlyReceivesMessagesForCorrectRecipient()
@@ -70,8 +73,6 @@ public abstract class TestSqlServerTransportBase : FixtureBase
 {
     protected const string QueueName = "input";
 
-    protected virtual bool UseSingleMessageTable => false;
-
     protected SqlServerTransport Transport { get; private set; }
     protected CancellationToken CancellationToken { get; private set; }
 
@@ -85,11 +86,6 @@ public abstract class TestSqlServerTransportBase : FixtureBase
         var asyncTaskFactory = new TplAsyncTaskFactory(consoleLoggerFactory);
 
         var sqlServerTransportOptions = CreateSqlServerTransportOptions(connectionProvider);
-
-        if (UseSingleMessageTable)
-        {
-            sqlServerTransportOptions.UseSingleMessageTable("Messages");
-        }
 
         Transport = new SqlServerTransport(connectionProvider, QueueName, consoleLoggerFactory, asyncTaskFactory, rebusTime, sqlServerTransportOptions);
 

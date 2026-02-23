@@ -22,7 +22,10 @@ public class TestSqlServerTransportCleanup : TestSqlServerTransportCleanupBase
 [TestFixture]
 public class TestSingleMessageTableSqlServerTransportCleanup : TestSqlServerTransportCleanupBase
 {
-    protected override bool UseSingleMessageTable => true;
+    protected override SqlServerTransportOptions CreateSqlServerTransportOptions(string connectionString)
+    {
+        return base.CreateSqlServerTransportOptions(connectionString).UseSingleMessageTable("Messages");
+    }
 }
 
 public abstract class TestSqlServerTransportCleanupBase : FixtureBase
@@ -30,8 +33,6 @@ public abstract class TestSqlServerTransportCleanupBase : FixtureBase
     BuiltinHandlerActivator _activator;
     ListLoggerFactory _loggerFactory;
     IBusStarter _starter;
-
-    protected virtual bool UseSingleMessageTable => false;
 
     protected override void SetUp()
     {
@@ -45,17 +46,17 @@ public abstract class TestSqlServerTransportCleanupBase : FixtureBase
 
         _loggerFactory = new ListLoggerFactory(outputToConsole: true);
 
-        var options = new SqlServerTransportOptions(SqlTestHelper.ConnectionString);
-
-        if (UseSingleMessageTable)
-        {
-            options.UseSingleMessageTable("Messages");
-        }
+        var options = CreateSqlServerTransportOptions(SqlTestHelper.ConnectionString);
 
         _starter = Configure.With(_activator)
             .Logging(l => l.Use(_loggerFactory))
             .Transport(t => t.UseSqlServer(options, queueName))
             .Create();
+    }
+    
+    protected virtual SqlServerTransportOptions CreateSqlServerTransportOptions(string connectionString)
+    {
+        return new SqlServerTransportOptions(connectionString);
     }
 
     [Test]

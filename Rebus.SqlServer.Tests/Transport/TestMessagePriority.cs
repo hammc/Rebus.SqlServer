@@ -17,23 +17,45 @@ using Rebus.Tests.Contracts.Utilities;
 namespace Rebus.SqlServer.Tests.Transport;
 
 [TestFixture]
-public class TestMessagePriority : FixtureBase
+public class TestMessagePriority : TestMessagePriorityBase
+{
+}
+
+[TestFixture]
+public class TestSingleTableMessagePriority : TestMessagePriorityBase
+{
+    protected override SqlServerTransportOptions CreateSqlServerTransportOptions(string connectionString)
+    {
+        return base.CreateSqlServerTransportOptions(connectionString).UseSingleMessageTable("Messages");
+    }
+
+    protected override SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions(string connectionString)
+    {
+        return base.CreateSqlServerLeaseTransportOptions(connectionString).UseSingleMessageTable("Messages");
+    }
+}
+
+public abstract class TestMessagePriorityBase : FixtureBase
 {
     protected override void SetUp() => SqlTestHelper.DropAllTables();
-
-    [Test]
-    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_Normal() => await RunTest("normal", false, 20);
-
-    [Test]
-    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_LeaseBased() => await RunTest("lease-based", false, 20);
-
-    [Test]
-    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_NormalSingleMessageTable() => await RunTest("normal", true, 20);
-
-    [Test]
-    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_LeaseBasedSingleMessageTable() => await RunTest("lease-based", true, 20);
     
-    async Task RunTest(string type, bool useSingleMessageTable, int messageCount)
+    protected virtual SqlServerTransportOptions CreateSqlServerTransportOptions(string connectionString)
+    {
+        return new SqlServerTransportOptions(connectionString);
+    }
+    
+    protected virtual SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions(string connectionString)
+    {
+        return new SqlServerLeaseTransportOptions(connectionString);
+    }
+
+    [Test]
+    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_Normal() => await RunTest("normal", 20);
+
+    [Test]
+    public async Task ReceivedMessagesByPriority_HigherIsMoreImportant_LeaseBased() => await RunTest("lease-based", 20);
+
+    private async Task RunTest(string type, int messageCount)
     {
         using var counter = new SharedCounter(messageCount);
         var receivedMessagePriorities = new List<int>();
@@ -48,13 +70,8 @@ public class TestMessagePriority : FixtureBase
             counter.Decrement();
         });
 
-        var sqlServerTransportOptions = new SqlServerTransportOptions(SqlTestHelper.ConnectionString);
-        var sqlServerLeaseTransportOptions = new SqlServerLeaseTransportOptions(SqlTestHelper.ConnectionString);
-        if (useSingleMessageTable)
-        {
-            sqlServerTransportOptions.UseSingleMessageTable("Messages");
-            sqlServerLeaseTransportOptions.UseSingleMessageTable("Messages");
-        }
+        var sqlServerTransportOptions = CreateSqlServerTransportOptions(SqlTestHelper.ConnectionString);
+        var sqlServerLeaseTransportOptions = CreateSqlServerLeaseTransportOptions(SqlTestHelper.ConnectionString);
         
         var serverBus = Configure.With(Using(server))
             .Transport(t =>

@@ -23,16 +23,32 @@ public class TestSqlServerTransportMessageOrdering : TestSqlServerTransportMessa
 [TestFixture]
 public class TestSingleMessageTableSqlServerTransportMessageOrdering : TestSqlServerTransportMessageOrderingBase
 {
-    protected override bool UseSingleMessageTable => true;
+    protected override SqlServerTransportOptions CreateSqlServerTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        return base.CreateSqlServerTransportOptions(connectionProvider).UseSingleMessageTable("Messages");
+    }
+    
+    protected override SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        return base.CreateSqlServerLeaseTransportOptions(connectionProvider).UseSingleMessageTable("Messages");
+    }
 }
 
 public abstract class TestSqlServerTransportMessageOrderingBase : FixtureBase
 {
     const string QueueName = "test-ordering";
 
-    protected virtual bool UseSingleMessageTable => false;
-
     protected override void SetUp() => SqlTestHelper.DropAllTables();
+    
+    protected virtual SqlServerTransportOptions CreateSqlServerTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        return new SqlServerTransportOptions(connectionProvider);
+    }
+    
+    protected virtual SqlServerLeaseTransportOptions CreateSqlServerLeaseTransportOptions(DbConnectionProvider connectionProvider)
+    {
+        return new SqlServerLeaseTransportOptions(connectionProvider);
+    }
 
     [TestCase(TransportType.LockedRows)]
     [TestCase(TransportType.LeaseBased)]
@@ -106,14 +122,8 @@ public abstract class TestSqlServerTransportMessageOrderingBase : FixtureBase
         var connectionProvider = new DbConnectionProvider(SqlTestHelper.ConnectionString, loggerFactory);
         var asyncTaskFactory = new TplAsyncTaskFactory(loggerFactory);
 
-        var sqlServerTransportOptions = new SqlServerTransportOptions(connectionProvider);
-        var sqlServerLeaseTransportOptions = new SqlServerLeaseTransportOptions(connectionProvider);
-
-        if (UseSingleMessageTable)
-        {
-            sqlServerTransportOptions.UseSingleMessageTable("Messages");
-            sqlServerLeaseTransportOptions.UseSingleMessageTable("Messages");
-        }
+        var sqlServerTransportOptions = CreateSqlServerTransportOptions(connectionProvider);
+        var sqlServerLeaseTransportOptions = CreateSqlServerLeaseTransportOptions(connectionProvider);
 
         var transport = transportType == TransportType.LeaseBased
             ? new SqlServerLeaseTransport(

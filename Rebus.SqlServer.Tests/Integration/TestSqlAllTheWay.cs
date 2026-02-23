@@ -20,7 +20,10 @@ public class TestSqlAllTheWay : TestSqlAllTheWayBase
 [TestFixture, Category(Categories.SqlServer)]
 public class TestSingleMessageTableSqlAllTheWay : TestSqlAllTheWayBase
 {
-    protected override bool UseSingleMessageTable => true;
+    protected override SqlServerTransportOptions CreateSqlServerTransportOptions(string connectionString)
+    {
+        return base.CreateSqlServerTransportOptions(connectionString).UseSingleMessageTable("Messages");
+    }
 }
 
 public abstract class TestSqlAllTheWayBase : FixtureBase
@@ -30,8 +33,6 @@ public abstract class TestSqlAllTheWayBase : FixtureBase
     BuiltinHandlerActivator _activator;
     IBusStarter _starter;
 
-    protected virtual bool UseSingleMessageTable => false;
-
     protected override void SetUp()
     {
         SqlTestHelper.DropAllTables();
@@ -40,12 +41,7 @@ public abstract class TestSqlAllTheWayBase : FixtureBase
 
         Using(_activator);
 
-        var options = new SqlServerTransportOptions(ConnectionString);
-
-        if (UseSingleMessageTable)
-        {
-            options.UseSingleMessageTable("Messages");
-        }
+        var options = CreateSqlServerTransportOptions(ConnectionString);
 
         _starter = Configure.With(_activator)
             .Transport(x => x.UseSqlServer(options, "test.input"))
@@ -61,6 +57,11 @@ public abstract class TestSqlAllTheWayBase : FixtureBase
     protected override void TearDown()
     {
         SqlTestHelper.DropAllTables();
+    }
+    
+    protected virtual SqlServerTransportOptions CreateSqlServerTransportOptions(string connectionString)
+    {
+        return new SqlServerTransportOptions(connectionString);
     }
 
     [Test]
