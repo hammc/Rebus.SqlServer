@@ -390,8 +390,8 @@ IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{tableN
 				[headers],
 				[body]
 		FROM	{ReceiveTableName.QualifiedName} M WITH (ROWLOCK, READPAST, READCOMMITTEDLOCK)
-		WHERE	M.[visible] < sysdatetimeoffset()
-		AND		M.[expiration] > sysdatetimeoffset()
+		WHERE	M.[visible] < getdate()
+		AND		M.[expiration] > getdate()
     {MessageTableStrategy.AdditionalReceiveConditions}
 		ORDER
 		BY		[priority] DESC,
@@ -488,8 +488,8 @@ VALUES
     @headers,
     @body,
     @priority,
-    dateadd(ms, @visiblemilliseconds, dateadd(ss, @visibletotalseconds, sysdatetimeoffset())),
-    dateadd(ms, @ttlmilliseconds, dateadd(ss, @ttltotalseconds, sysdatetimeoffset()))
+    dateadd(ms, @visiblemilliseconds, dateadd(ss, @visibletotalseconds, getdate())),
+    dateadd(ms, @ttlmilliseconds, dateadd(ss, @ttltotalseconds, getdate()))
 )";
 
         var headers = message.Headers.Clone();
@@ -567,7 +567,7 @@ VALUES
                     $@"
 ;with TopCTE as (
 	SELECT TOP 1 [id] FROM {ReceiveTableName.QualifiedName} WITH (ROWLOCK, READPAST)
-				WHERE [expiration] < sysdatetimeoffset()
+				WHERE [expiration] < getdate()
         {MessageTableStrategy.AdditionalCleanupConditions}
 )
 DELETE FROM TopCTE

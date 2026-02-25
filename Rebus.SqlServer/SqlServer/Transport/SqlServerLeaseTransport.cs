@@ -137,12 +137,12 @@ public class SqlServerLeaseTransport : SqlServerTransport
 			[leaseduntil],
 			[leasedby]
 	FROM	{ReceiveTableName.QualifiedName} M WITH (ROWLOCK, READPAST, READCOMMITTEDLOCK)
-	WHERE	M.[visible] < sysdatetimeoffset()
-	AND		M.[expiration] > sysdatetimeoffset()
+	WHERE	M.[visible] < getdate()
+	AND		M.[expiration] > getdate()
   {MessageTableStrategy.AdditionalReceiveConditions}
 	AND		1 = CASE
 					WHEN M.[leaseduntil] is null then 1
-					WHEN DATEADD(ms, @leasetolerancemilliseconds, DATEADD(ss, @leasetolerancetotalseconds, M.[leaseduntil])) < sysdatetimeoffset() THEN 1
+					WHEN DATEADD(ms, @leasetolerancemilliseconds, DATEADD(ss, @leasetolerancetotalseconds, M.[leaseduntil])) < getdate() THEN 1
 					ELSE 0
 				END
 	ORDER
@@ -151,8 +151,8 @@ public class SqlServerLeaseTransport : SqlServerTransport
 			[id] ASC
 )
 UPDATE	TopCTE WITH (ROWLOCK, READCOMMITTEDLOCK)
-SET		[leaseduntil] = DATEADD(ms, @leasemilliseconds, DATEADD(ss, @leasetotalseconds, sysdatetimeoffset())),
-		[leasedat] = sysdatetimeoffset(),
+SET		[leaseduntil] = DATEADD(ms, @leasemilliseconds, DATEADD(ss, @leasetotalseconds, getdate())),
+		[leasedat] = getdate(),
 		[leasedby] = @leasedby
 OUTPUT	inserted.*";
             selectCommand.Parameters.Add("@leasetotalseconds", SqlDbType.Int).Value = (int)_leaseInterval.TotalSeconds;
@@ -395,7 +395,7 @@ WHERE	id = @id
             {
                 command.CommandText = $@"
 UPDATE	{tableName} WITH (ROWLOCK)
-SET		leaseduntil =	dateadd(ms, @leaseintervalmilliseconds, dateadd(ss, @leaseintervaltotalseconds, sysdatetimeoffset())),
+SET		leaseduntil =	dateadd(ms, @leaseintervalmilliseconds, dateadd(ss, @leaseintervaltotalseconds, getdate())),
 		leasedby	=	leasedby,
 		leasedat	=	leasedat
 WHERE	id = @id
