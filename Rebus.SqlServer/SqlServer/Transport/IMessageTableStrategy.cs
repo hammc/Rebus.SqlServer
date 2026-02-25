@@ -16,5 +16,7 @@ internal interface IMessageTableStrategy
     void AddAdditionalInsertParameters(SqlCommand command, string destinationAddress);
     void AddAdditionalReceiveParameters(SqlCommand selectCommand);
     void AddAdditionalCleanupParameters(SqlCommand command);
+    string SqlDateType { get; }
+    string SqlNow { get; }
     TableName GetSendTable(string destinationAddress);
 }

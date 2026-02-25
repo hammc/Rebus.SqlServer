@@ -31,5 +31,8 @@ internal class TablePerQueueStrategy : IMessageTableStrategy
     {
     }
 
+    public string SqlDateType => "datetimeoffset";
+    public string SqlNow => "sysdatetimeoffset()";
+
     public TableName GetSendTable(string destinationAddress) => TableName.Parse(destinationAddress);
 }

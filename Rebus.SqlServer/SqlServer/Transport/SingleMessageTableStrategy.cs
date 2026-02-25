@@ -40,5 +40,8 @@ internal class SingleMessageTableStrategy : IMessageTableStrategy
         command.Parameters.Add("recipient", SqlDbType.NVarChar, RecipientColumnSize).Value = Address;
     }
 
+    public string SqlDateType => "datetime2";
+    public string SqlNow => "getdate()";
+
     public TableName GetSendTable(string destinationAddress) => ReceiveTableName;
 }
