@@ -6,12 +6,16 @@ namespace Rebus.SqlServer.Transport;
 
 internal class SingleMessageTableStrategy : IMessageTableStrategy
 {
+    private TableName MessageTableName { get; }
     private const int RecipientColumnSize = 200;
 
     public SingleMessageTableStrategy(string inputQueueName, string messageTableName)
     {
         Address = inputQueueName;
-        ReceiveTableName = messageTableName != null ? TableName.Parse(messageTableName) : null;
+        MessageTableName = TableName.Parse(messageTableName);
+
+        if (inputQueueName != null)
+            ReceiveTableName = MessageTableName;
     }
 
     public string Address { get; }
@@ -43,5 +47,5 @@ internal class SingleMessageTableStrategy : IMessageTableStrategy
     public string SqlDateType => "datetime2";
     public string SqlNow => "getdate()";
 
-    public TableName GetSendTable(string destinationAddress) => ReceiveTableName;
+    public TableName GetSendTable(string destinationAddress) => MessageTableName;
 }
